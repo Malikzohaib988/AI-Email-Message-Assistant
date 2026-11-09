@@ -1,0 +1,168 @@
+"""
+groq_service.py - Groq API Integration Module
+AI Email & Message Assistant
+Author: Generative AI Student
+
+This module handles communication between the application and the Groq API.
+It securely retrieves credentials from the environment, manages models with automatic fallback,
+and calls supported LLM models.
+"""
+
+import os
+from dotenv import load_dotenv
+from groq import Groq, AuthenticationError, RateLimitError, APIConnectionError
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Supported Groq Models
+DEFAULT_MODEL = "qwen/qwen3.8-27b"
+FALLBACK_MODELS = [
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile"
+]
+
+
+def get_api_credentials():
+    """
+    Retrieves the Groq API Key and Model ID from environment variables.
+    """
+    # Reload dotenv in case .env was modified at runtime
+    load_dotenv(override=True)
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    model = os.getenv("GROQ_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    return api_key, model
+
+
+def check_api_status():
+    """
+    Checks if a valid Groq API key is present in environment.
+
+    Returns:
+        dict: {'configured': bool, 'model': str, 'message': str}
+    """
+    api_key, model = get_api_credentials()
+    
+    # Placeholders check
+    placeholder_keys = [
+        "", "your_api_key", "your_groq_api_key", 
+        "paste_your_actual_api_key_here", "your_actual_api_key_here", 
+        "replace_with_your_key"
+    ]
+    
+    if not api_key or api_key in placeholder_keys:
+        return {
+            "configured": False,
+            "model": model,
+            "message": "Groq API Key is not set in .env. Please configure GROQ_API_KEY."
+        }
+    
+    return {
+        "configured": True,
+        "model": model,
+        "message": f"Groq API is configured with model {model}."
+    }
+
+
+def _call_groq_model(client: Groq, model: str, prompt: str, temperature: float = 0.7) -> str:
+    """
+    Internal helper to execute a completion request for a specific model.
+    """
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert executive communication and message writing assistant. "
+                    "You craft polished, clear, context-aware messages and emails adhering strictly to user guidelines."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=temperature,
+        max_tokens=1024
+    )
+
+    if response.choices and len(response.choices) > 0:
+        content = response.choices[0].message.content
+        if content:
+            return content.strip()
+    return ""
+
+
+def generate_message(prompt: str, temperature: float = 0.7) -> str:
+    """
+    Sends the constructed prompt to Groq API and returns the generated text.
+    Includes smart auto-fallback if the specified model is not available.
+
+    Parameters:
+        prompt (str): The instructions and content for the LLM.
+        temperature (float): Controls randomness (default 0.7).
+
+    Returns:
+        str: AI generated response, or an error message starting with 'Error:' or 'API Error:'.
+    """
+    api_key, model = get_api_credentials()
+
+    placeholder_keys = [
+        "", "your_api_key", "your_groq_api_key", 
+        "paste_your_actual_api_key_here", "your_actual_api_key_here", 
+        "replace_with_your_key"
+    ]
+
+    # Validate API key
+    if not api_key or api_key in placeholder_keys:
+        return (
+            "Error: Groq API key is missing. "
+            "Please open your '.env' file, paste your API key into GROQ_API_KEY=, and try again."
+        )
+
+    if not model:
+        model = DEFAULT_MODEL
+
+    try:
+        # Initialize Groq client
+        client = Groq(api_key=api_key)
+
+        # Build model candidate list (user requested model first, then fallbacks)
+        candidates = [model] + [m for m in FALLBACK_MODELS if m != model]
+        last_error = None
+
+        for candidate in candidates:
+            try:
+                result = _call_groq_model(client, candidate, prompt, temperature)
+                if result:
+                    return result
+            except Exception as candidate_err:
+                err_str = str(candidate_err)
+                last_error = candidate_err
+                # If model not found (404), continue to next candidate model
+                if "model_not_found" in err_str or "does not exist" in err_str or "404" in err_str:
+                    continue
+                else:
+                    # Non-model error (e.g. auth error, network), re-raise to be handled by outer try/except
+                    raise candidate_err
+
+        if last_error:
+            raise last_error
+
+        return "Error: No response generated by Groq API."
+
+    except AuthenticationError:
+        return "API Error: Invalid Groq API Key. Please verify your GROQ_API_KEY in the .env file."
+    except RateLimitError:
+        return "API Error: Groq rate limit exceeded. Please wait a moment and try again."
+    except APIConnectionError:
+        return "API Error: Unable to connect to Groq AI servers. Please check your internet connection."
+    except Exception as error:
+        error_msg = str(error)
+        # Prevent leaking raw keys if present in error message
+        if api_key and api_key in error_msg:
+            error_msg = error_msg.replace(api_key, "[HIDDEN_KEY]")
+        return f"API Error: {error_msg}"

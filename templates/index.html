@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email & Message Assistant | Powered by Groq AI</title>
+    <!-- Modern Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow glow-1"></div>
+        <div class="glow glow-2"></div>
+    </div>
+
+    <div class="app-shell">
+        <!-- ==================== COMPACT TOP NAVBAR ==================== -->
+        <header class="navbar">
+            <div class="nav-brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1 class="brand-title">AI Email &amp; Message Assistant</h1>
+                    <span class="brand-badge">⚡ Powered by Groq AI</span>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <div class="status-pill" id="apiStatusBadge">
+                    <span class="status-dot {% if api_status.configured %}status-active{% else %}status-warning{% endif %}"></span>
+                    <span id="apiStatusText">{% if api_status.configured %}Groq Active ({{ api_status.model }}){% else %}Set API Key in .env{% endif %}</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ==================== MAIN WORKSPACE (VIEWPORT FIT) ==================== -->
+        <main class="workspace">
+            
+            <!-- LEFT PANEL: INPUT FORM -->
+            <section class="panel panel-input">
+                <div class="panel-header">
+                    <div class="panel-title-wrapper">
+                        <div class="panel-icon input-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="panel-title">Compose &amp; Refine</h2>
+                            <p class="panel-subtitle">Configure message parameters and draft rough ideas</p>
+                        </div>
+                    </div>
+                </div>
+
+                <form id="messageForm" class="composer-form" onsubmit="return false;">
+                    
+                    <!-- Selection Controls Row -->
+                    <div class="control-row">
+                        <!-- Message Category -->
+                        <div class="control-group">
+                            <label for="messageType" class="control-label">Message Type</label>
+                            <div class="select-wrapper">
+                                <select id="messageType" class="form-select" required>
+                                    {% for category in message_types %}
+                                    <option value="{{ category }}" {% if loop.first %}selected{% endif %}>{{ category }}</option>
+                                    {% endfor %}
+                                </select>
+                                <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- Writing Tone -->
+                        <div class="control-group">
+                            <label for="messageTone" class="control-label">Writing Tone</label>
+                            <div class="select-wrapper">
+                                <select id="messageTone" class="form-select" required>
+                                    {% for t in tones %}
+                                    <option value="{{ t }}" {% if loop.first %}selected{% endif %}>{{ t }}</option>
+                                    {% endfor %}
+                                </select>
+                                <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Compact Quick Presets -->
+                    <div class="presets-bar">
+                        <span class="presets-label">Quick Presets:</span>
+                        <div class="preset-chips">
+                            <button type="button" class="preset-chip" data-type="Professional Email" data-tone="Professional" data-text="i want to ask my teacher about assignment deadline">
+                                📝 Deadline
+                            </button>
+                            <button type="button" class="preset-chip" data-type="Leave Application" data-tone="Polite" data-text="i have fever and cannot attend class tomorrow please give me leave">
+                                🤒 Sick Leave
+                            </button>
+                            <button type="button" class="preset-chip" data-type="Student Message" data-tone="Friendly" data-text="send me yesterday class notes when you are free">
+                                📚 Class Notes
+                            </button>
+                            <button type="button" class="preset-chip" data-type="Formal Request" data-tone="Professional" data-text="need permission to arrange a seminar in the main auditorium next week">
+                                🏛️ Seminar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Rough Message Input -->
+                    <div class="textarea-wrapper">
+                        <div class="textarea-header">
+                            <label for="roughMessage" class="control-label">Your Rough Message</label>
+                            <div class="textarea-meta">
+                                <span class="shortcut-hint">Ctrl + Enter to Generate</span>
+                                <span class="char-badge" id="charCounter">0 chars</span>
+                            </div>
+                        </div>
+                        <textarea 
+                            id="roughMessage" 
+                            class="form-textarea" 
+                            placeholder="Type or paste your rough thoughts here... (e.g., 'i have fever and cannot attend class tomorrow please give me leave')"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <!-- Compact Advanced Options Bar (Inline, no huge accordion) -->
+                    <div class="options-strip">
+                        <div class="option-item">
+                            <label for="lengthPreference" class="option-label">Length:</label>
+                            <select id="lengthPreference" class="mini-select">
+                                <option value="balanced" selected>Standard</option>
+                                <option value="concise">Concise</option>
+                                <option value="detailed">Detailed</option>
+                            </select>
+                        </div>
+
+                        <div class="option-divider"></div>
+
+                        <div class="option-item toggle-item">
+                            <label class="toggle-switch" for="urduToggle">
+                                <input type="checkbox" id="urduToggle">
+                                <span class="switch-track"></span>
+                            </label>
+                            <label for="urduToggle" class="option-label cursor-pointer">
+                                <span>Urdu Translation</span>
+                                <span class="urdu-tag">اردو</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button type="button" id="generateBtn" class="btn btn-primary">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            <span id="generateBtnText">Generate with AI</span>
+                        </button>
+
+                        <button type="button" id="clearAllBtn" class="btn btn-secondary" title="Reset fields">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            <span>Clear</span>
+                        </button>
+                    </div>
+
+                    <!-- Error Alert Box -->
+                    <div id="errorAlert" class="alert alert-error hidden" role="alert">
+                        <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <span id="errorMessage" class="alert-text">Please enter your message.</span>
+                        <button type="button" class="alert-close" onclick="hideError()">&times;</button>
+                    </div>
+
+                </form>
+            </section>
+
+            <!-- RIGHT PANEL: AI OUTPUT CARD -->
+            <section class="panel panel-output">
+                <div class="panel-header">
+                    <div class="panel-title-wrapper">
+                        <div class="panel-icon output-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="panel-title">AI-Generated Result</h2>
+                            <p class="panel-subtitle" id="outputMetaTag">Formatted &amp; ready to send</p>
+                        </div>
+                    </div>
+
+                    <!-- Action Toolbar in Header (Always Accessible) -->
+                    <div class="output-toolbar hidden" id="outputToolbar">
+                        <button type="button" id="copyBtn" class="btn-tool" title="Copy to clipboard">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <span>Copy</span>
+                        </button>
+
+                        <button type="button" id="downloadBtn" class="btn-tool" title="Save as .txt">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <span>Download</span>
+                        </button>
+
+                        <button type="button" id="regenerateBtn" class="btn-tool" title="Generate fresh variation">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            <span>Regenerate</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STATE CONTAINER (SCROLLABLE INTERNALLY) -->
+                <div class="output-scroll-body">
+                    
+                    <!-- 1. EMPTY STATE -->
+                    <div id="outputEmptyState" class="state-empty">
+                        <div class="empty-glow-box">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                <line x1="9" y1="10" x2="15" y2="10"></line>
+                                <line x1="12" y1="7" x2="12" y2="13"></line>
+                            </svg>
+                        </div>
+                        <h3 class="state-title">Ready for Your Input</h3>
+                        <p class="state-subtitle">Type your draft on the left or click a quick preset to instantly transform rough notes into executive messages.</p>
+                        
+                        <div class="feature-badges">
+                            <span class="f-badge">⚡ Instant Grammar &amp; Flow Correction</span>
+                            <span class="f-badge">🎯 Zero Hallucination of Facts</span>
+                            <span class="f-badge">📋 1-Click Clipboard &amp; TXT Export</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. LOADING STATE -->
+                    <div id="outputLoadingState" class="state-loading hidden">
+                        <div class="pulsing-spinner">
+                            <div class="spinner-ring"></div>
+                            <svg class="spinner-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                        </div>
+                        <h3 class="state-title">Generating with Groq AI...</h3>
+                        <p class="state-subtitle">Applying tone guidelines, formal greetings, and structure</p>
+                    </div>
+
+                    <!-- 3. RESULT CONTENT -->
+                    <div id="outputContentContainer" class="result-content hidden">
+                        
+                        <!-- Subject Line (if present) -->
+                        <div id="subjectBox" class="subject-card hidden">
+                            <div class="subject-header">
+                                <span class="subject-tag">SUBJECT LINE</span>
+                                <button type="button" id="copySubjectBtn" class="btn-copy-sub" title="Copy Subject">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                    <span>Copy Subject</span>
+                                </button>
+                            </div>
+                            <div id="subjectText" class="subject-value"></div>
+                        </div>
+
+                        <!-- Formatted Message Body -->
+                        <div class="message-card">
+                            <div class="message-header-bar">
+                                <span class="format-indicator">Generated Message Draft</span>
+                                <span class="time-stamp" id="generationTimestamp">Just now</span>
+                            </div>
+                            <div id="generatedText" class="generated-body"></div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Sleek Bottom Bar in Output Card -->
+                <div class="panel-footer" id="outputFooter">
+                    <span class="footer-note">Generative AI • Weeks 1-3 Project</span>
+                    <button type="button" class="btn-copy-full" id="copyPillBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <span>Copy Message</span>
+                    </button>
+                </div>
+
+            </section>
+        </main>
+
+        <!-- ==================== TOAST NOTIFICATION ==================== -->
+        <div id="toastNotification" class="toast hidden">
+            <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span id="toastMessage">Copied to clipboard!</span>
+        </div>
+    </div>
+
+    <!-- Main JavaScript -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
